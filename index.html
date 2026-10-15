@@ -1,0 +1,47 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>온통 Day 예매권</title><style>
+:root{color-scheme:dark;--bg:#0d1330;--ink:#fff;--mute:#c7d2ee;--gold:#f2c94c;--card:#182150}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;line-height:1.55;word-break:keep-all;padding-inline:16px;padding-block:22px 40px}
+main{max-width:560px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.k{font-size:12px;letter-spacing:.2em;color:var(--gold);font-weight:700}
+h1{margin:0;font-size:30px;line-height:1.2;font-weight:900}
+.seat{display:flex;align-items:baseline;gap:12px}.seat b{font-size:56px;line-height:1;color:var(--gold);font-weight:900}.seat span{color:var(--mute);font-size:15px}
+.t{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in;border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 12px 30px rgba(0,0,0,.4)}.t img{display:block;width:100%;height:auto}
+.h{margin:-8px 0 0;color:#8e9cc6;font-size:13px}
+.box{border-radius:14px;padding:20px 18px;background:var(--card);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.win{background:linear-gradient(135deg,#f2c94c,#ffe9a0);color:#10162f;text-align:center;padding:28px 18px}.win h2{font-size:34px;line-height:1.15;margin:0 0 8px}.win p{margin:0;font-size:19px;font-weight:700}
+.lose{text-align:center}.lose h2{margin:0 0 6px;font-size:24px}.lose p{margin:0;color:var(--mute)}
+.none{min-height:70vh;display:grid;place-items:center;text-align:center;color:var(--mute)}
+dialog{border:0;padding:0;background:transparent;max-width:96vw}dialog img{width:100%;height:auto;display:block}dialog::backdrop{background:rgba(0,0,0,.85)}
+</style></head><body>
+<main id="m"><div class="none"><p>예매권의 QR을 찍어 주세요.</p></div></main>
+<dialog id="d"><img id="di" alt=""></dialog>
+<script>
+const enc = s => new TextEncoder().encode(s);
+const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+const none = () => { document.getElementById('m').innerHTML = '<div class="none"><p>예매권의 QR을 찍어 주세요.</p></div>'; };
+async function show(){
+  const t = location.hash.replace('#', '');
+  if (!/^[a-z0-9]{6}$/.test(t)) return none();
+  try {
+    const base = await crypto.subtle.importKey('raw', enc(t), 'PBKDF2', false, ['deriveBits']);
+    const derive = async (salt, n) => crypto.subtle.deriveBits({name: 'PBKDF2', hash: 'SHA-256', salt: enc(salt), iterations: 150000}, base, n * 8);
+    const id = hex(await derive('ontong-1016-id', 10));
+    const r = await fetch(id + '.bin', {cache: 'no-store'}); if (!r.ok) return none();
+    const buf = new Uint8Array(await r.arrayBuffer());
+    const k = await crypto.subtle.importKey('raw', await derive('ontong-1016-key', 32), 'AES-GCM', false, ['decrypt']);
+    const p = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: buf.slice(0, 12)}, k, buf.slice(12))));
+    const row = p.s[0], num = p.s.slice(1); let box = '';
+    if (p.win === true) box = '<div class="box win"><h2>당첨을 축하합니다!</h2><p>' + esc(p.prize || '상품은 진행자가 알려 드립니다') + '</p></div>';
+    else if (p.win === false) box = '<div class="box lose"><h2>아쉽지만 이번에는 다음 기회에</h2><p>그래도 팝콘은 끝까지 드실 수 있습니다.</p></div>';
+    document.getElementById('m').innerHTML = '<div class="k">가족과 함께 온통(ON:通) Day · 미래혁신센터 정보전략팀</div><h1>' + esc(p.n) + '님</h1>'
+      + '<div class="seat"><b>' + esc(p.s) + '</b><span>' + row + '열 ' + num + '번 · 롯데시네마 용산 4관<br>2026. 10. 16. 금요일 오후 5시</span></div>' + box
+      + '<button class="t" id="tb"><img src="' + p.img + '" alt="' + esc(p.n) + '님의 예매권"></button><p class="h">표를 누르면 크게 볼 수 있습니다.</p>';
+    document.getElementById('tb').onclick = () => { document.getElementById('di').src = p.img; document.getElementById('d').showModal(); };
+  } catch (e) { none(); }
+}
+document.getElementById('d').onclick = e => e.currentTarget.close();
+addEventListener('hashchange', show); show();
+</script></body></html>
